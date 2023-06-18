@@ -1,0 +1,9 @@
+app:
+  url: http://localhost:5173
+
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/projet_GL
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password:

@@ -1,0 +1,37 @@
+debug: false
+
+spring:
+  profiles:
+    active: prod
+  jpa:
+    hibernate:
+      ddl-auto: update
+    database: MYSQL
+    show-sql: false
+    open-in-view: true
+  application:
+    admin:
+      enabled: false
+  mail:
+    host: smtp@gmail.com
+    port: 587
+    username: rhymni.projetgl@gmail.com
+    password: ilgbdjjtlrkptkws
+  properties: 
+    mail:
+      smtp:
+        auth: true
+        starttls:
+          enable: true
+
+app:
+  jwt:
+    secret: ec17e443d1374393e9195bd573840a41472d9c68807cee4dfc0cec02c556ea2b
+
+logging:
+  level:
+    org:
+      springframework:
+        boot:
+          autoconfigure:
+            logging: OFF

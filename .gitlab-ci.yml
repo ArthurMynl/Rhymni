@@ -1,0 +1,202 @@
+stages:
+  - build
+  - test
+  - analysis
+  - deploy_dev_backend
+  - deploy_prod_backend
+  - deploy_dev_frontend
+  - deploy_prod_frontend
+
+variables:
+  MAVEN_SETTINGS_PATH: ".m2/settings.xml"
+  MAVEN_OPTS: "-Dhttp.proxyHost=192.168.4.8 -Dhttp.proxyPort=3128 -Dhttps.proxyHost=192.168.4.8 -Dhttps.proxyPort=3128 -Dhttps.protocols=TLSv1.2 -Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -Dorg.slf4j.simpleLogger.showDateTime=true -Djava.awt.headless=true"
+  MAVEN_CLI_OPTS: "--batch-mode --errors --fail-at-end --show-version -DinstallAtEnd=true -DdeployAtEnd=true"
+
+cache:
+  key: "maven-$CI_COMMIT_REF_SLUG"
+  paths:
+    - .m2/repository
+
+before_script:
+  - export https_proxy=http://192.168.4.8:3128/
+  - export http_proxy=http://192.168.4.8:3128/
+
+build_backend:
+  stage: build
+  image: maven:3.8.1-jdk-11
+  script:
+    - cd Back-end
+    - curl https://repo.maven.apache.org/maven2/org/springframework/boot/spring-boot-starter-parent/2.5.2/spring-boot-starter-parent-2.5.2.pom
+    - mvn $MAVEN_CLI_OPTS package -Dmaven.test.skip=true
+  artifacts:
+    name: "Maven artifacts from $CI_PROJECT_NAME on $CI_COMMIT_REF_SLUG"
+    paths:
+      - "**/target/*.jar"
+  only:
+    - master
+    - dev
+    - test-louis
+    - test-arthur
+    - test-bastien
+    - test-nathan
+    - test-sixtine
+    - test-jules
+    - test-maxime
+    - test-ange
+
+build_frontend_dev:
+  stage: build
+  image: node:19.9
+  script:
+    - cd Front-end
+    - npm install
+    - npm run build:dev
+  artifacts:
+    paths:
+      - Front-end/build
+  only:
+    - dev
+    - test-louis
+    - test-arthur
+    - test-bastien
+    - test-nathan
+    - test-sixtine
+    - test-jules
+    - test-maxime
+    - test-ange
+
+build_frontend_prod:
+  stage: build
+  image: node:19.9
+  script:
+    - cd Front-end
+    - npm install
+    - npm run build:prod
+  artifacts:
+    paths:
+      - Front-end/build
+  only:
+    - master
+
+test_backend:
+  stage: test
+  image: maven:3.8.1-jdk-11
+  dependencies:
+    - build_backend
+  script:
+    - cd Back-end
+    - mvn $MAVEN_CLI_OPTS test jacoco:report -DtestFailureIgnore=true
+  variables:
+    SPRING_PROFILES_ACTIVE: test
+  artifacts:
+    reports:
+      junit: "**/target/surefire-reports/TEST-*.xml"
+    paths:
+      - Back-end/target/site/jacoco/jacoco.xml
+  only:
+    - master
+    - dev
+    - test-louis
+    - test-arthur
+    - test-bastien
+    - test-nathan
+    - test-sixtine
+    - test-jules
+    - test-maxime
+    - test-ange
+
+quality_dev_backend:
+  stage: analysis
+  image: maven:3.8.1-jdk-11
+  dependencies:
+    - build_backend
+    - test_backend
+  script:
+    - cd Back-end
+    - mvn compile
+    - mvn validate sonar:sonar -Dsonar.projectName=Team6_DevBranch -Dsonar.projectKey=Team6_DevBranch_Project -Dsonar.host.url=http://172.24.1.1:9000/sonar -Dsonar.login=$SONAR_TOKEN_DEV -Dsonar.tests=src/test/java -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+  only:
+    - dev
+    - test-louis
+    - test-arthur
+    - test-bastien
+    - test-nathan
+    - test-sixtine
+    - test-jules
+    - test-maxime
+    - test-ange
+
+quality_prod_backend:
+  stage: analysis
+  image: maven:3.8.1-jdk-11
+  dependencies:
+    - build_backend
+    - test_backend
+  script:
+    - cd Back-end
+    - mvn compile
+    - mvn validate sonar:sonar -Dsonar.projectName=Team6_MasterBranch -Dsonar.projectKey=Team6_MasterBranch_Project -Dsonar.host.url=http://172.24.1.1:9000/sonar -Dsonar.login=$SONAR_TOKEN_PROD -Dsonar.tests=src/test -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+  only:
+    - master
+
+deploy_dev_backend:
+  stage: deploy_dev_backend
+  image: maven:3.8.1-jdk-11
+  dependencies:
+    - build_backend
+  script:
+    - cd Back-end
+    - chmod 400 $SSH_KEY_DEV
+    - ssh -o StrictHostKeyChecking=no -i $SSH_KEY_DEV etudiant@172.24.1.33 'cd /home/etudiant && mkdir -p builds/backend && pkill java || true'
+    - scp -o StrictHostKeyChecking=no -i $SSH_KEY_DEV target/*.jar etudiant@172.24.1.33:/home/etudiant/builds/backend/rhymni.jar
+    - ssh -o StrictHostKeyChecking=no -i $SSH_KEY_DEV etudiant@172.24.1.33 'echo "cd /home/etudiant/builds/backend && SPRING_PROFILES_ACTIVE=dev nohup java -jar rhymni.jar  > app.log 2>&1 "|at now'
+  only:
+    - dev
+
+deploy_prod_backend:
+  stage: deploy_prod_backend
+  image: maven:3.8.1-jdk-11
+  dependencies:
+    - build_backend
+  script:
+    - cd Back-end
+    - chmod 400 $SSH_KEY_PROD
+    - ssh -o StrictHostKeyChecking=no -i $SSH_KEY_PROD etudiant@172.24.1.20 'cd /home/etudiant && mkdir -p builds/backend && pkill java || true'
+    - scp -o StrictHostKeyChecking=no -i $SSH_KEY_PROD target/*.jar etudiant@172.24.1.20:/home/etudiant/builds/backend/rhymni.jar
+    - ssh -o StrictHostKeyChecking=no -i $SSH_KEY_PROD etudiant@172.24.1.20 'echo "cd /home/etudiant/builds/backend && SPRING_PROFILES_ACTIVE=prod nohup java -jar rhymni.jar  > app.log 2>&1 "|at now'
+  only:
+    - master
+
+deploy_dev_frontend:
+  stage: deploy_dev_frontend
+  image: node:19.9
+  dependencies:
+    - build_frontend_dev
+    - deploy_dev_backend
+  script:
+    - cd Front-end
+    - chmod 400 $SSH_KEY_DEV
+    - ssh -o StrictHostKeyChecking=no -i $SSH_KEY_DEV etudiant@172.24.1.33 'cd /home/etudiant && mkdir -p builds/frontend'
+    - scp -o StrictHostKeyChecking=no -i $SSH_KEY_DEV -r build/* etudiant@172.24.1.33:/home/etudiant/builds/frontend
+    - scp -o StrictHostKeyChecking=no -i $SSH_KEY_DEV package.json etudiant@172.24.1.33:/home/etudiant/builds/frontend/package.json
+    - ssh -o StrictHostKeyChecking=no -i $SSH_KEY_DEV etudiant@172.24.1.33 'cd /home/etudiant/builds/frontend && http_proxy=http://192.168.4.8:3128/ npm install'
+    - ssh -o StrictHostKeyChecking=no -i $SSH_KEY_DEV etudiant@172.24.1.33 'pm2 restart all'
+  only:
+    - dev
+
+deploy_prod_frontend:
+  stage: deploy_prod_frontend
+  image: node:19.9
+  dependencies:
+    - build_frontend_prod
+    - deploy_prod_backend
+  script:
+    - cd Front-end
+    - chmod 400 $SSH_KEY_PROD
+    - ssh -o StrictHostKeyChecking=no -i $SSH_KEY_PROD etudiant@172.24.1.20 'cd /home/etudiant && mkdir -p builds/frontend'
+    - scp -o StrictHostKeyChecking=no -i $SSH_KEY_PROD -r build/* etudiant@172.24.1.20:/home/etudiant/builds/frontend
+    - scp -o StrictHostKeyChecking=no -i $SSH_KEY_PROD package.json etudiant@172.24.1.20:/home/etudiant/builds/frontend/package.json
+    - ssh -o StrictHostKeyChecking=no -i $SSH_KEY_PROD etudiant@172.24.1.20 'cd /home/etudiant/builds/frontend && http_proxy=http://192.168.4.8:3128/ npm install'
+    - ssh -o StrictHostKeyChecking=no -i $SSH_KEY_PROD etudiant@172.24.1.20 'pm2 flush && pm2 restart all'
+  only:
+    - master

@@ -1,0 +1,5 @@
+package com.projet_gl.rhymni.entity;
+
+public enum Role {
+    ROLE_STUDENT, ROLE_TEACHER, ROLE_OPTION_LEADER, ROLE_PLANNING_ASSISTANT, ROLE_JURY_MEMBER, ROLE_TEAM_MEMBER
+}
